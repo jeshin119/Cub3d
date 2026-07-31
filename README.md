@@ -3,24 +3,47 @@
 The goal of ``cub3d`` is to make *something* using raycasting (like [Wolfenstein 3D](https://fr.wikipedia.org/wiki/Wolfenstein_3D)).
 
 ![Image](https://github.com/user-attachments/assets/a2a6f56b-9483-4337-a1aa-017bb0beae14)
+# Cub3d (팀 프로젝트)
 
-* WASD to move, QE or Left/Right directional keys to rotate camera
-* I to toggle Interface, O to toggle crosshair, L to toggle shadows
-* ESC to quit
-* Textures or colors for each sides (North, South, West, East) and Sky/Floor
-* Shadows based on the distance
-* Crosshair
-* 3 different sprites
-* Minimap
-* Collectable items
+Wolfenstein 3D 스타일의 레이캐스팅(raycasting) 기반 3D 미로 렌더링 게임입니다. 2인 팀 프로젝트로 진행했습니다.
 
-## Ressources
+## 배경
 
-* [Playable Wolfenstein 3D](http://users.atw.hu/wolf3d/)
-* [Raycasting in JS](http://www.playfuljs.com/a-first-person-engine-in-265-lines/)
-* [Some X11 event numbers](https://github.com/qst0/ft_libgfx)
-* [Full tutorial in English](https://lodev.org/cgtutor/raycasting.html)
-* [Full tutorial in French (translation of the English tutorial)](http://forums.mediabox.fr/wiki/tutoriaux/flashplatform/affichage/3d/raycasting)
-* [Images in minilibx](https://github.com/keuhdall/images_example)
-* [BMP format on StackOverflow](https://stackoverflow.com/questions/2654480/writing-bmp-image-in-pure-c-c-without-other-libraries)
-* [BMP format explanation](https://web.archive.org/web/20080912171714/http://www.fortunecity.com/skyscraper/windows/364/bmpffrmt.html)
+실제 3D 폴리곤 렌더링 없이도, 2D 맵 위에서 플레이어 시점 기준으로 광선을 여러 방향으로 쏘아 벽까지의 거리를 계산하고 그 거리에 반비례하는 높이로 세로줄을 그리면 유사 3D처럼 보이게 만들 수 있습니다(레이캐스팅). DDA(Digital Differential Analysis) 알고리즘으로 격자 위에서 광선이 벽에 부딪히는 지점을 효율적으로 찾고, 그 지점의 텍스처 좌표를 계산해 입히는 것이 핵심 과제입니다.
+
+2인 팀 프로젝트로, 커밋 기록상 본인은 맵 파싱·검증(`parse`/`check_map`), 레이캐스팅(`raycasting`), 텍스처 매핑(`texture`), 렌더링(`render`) 등을 주로 담당했고, 벽 충돌 판정(`validate`)은 팀원이 주로 기여했습니다.
+
+## 요구사항
+
+- `.cub` 맵 파일 파싱(맵 레이아웃, 벽 4방향 텍스처 경로, 천장/바닥 RGB 색상)
+- 맵 유효성 검증(닫힌 공간 여부, 잘못된 문자 등)
+- WASD 이동, 방향키로 시점 회전
+- 텍스처가 입혀진 벽면을 방향별로 정확히 렌더링
+- ESC 또는 창 닫기로 정상 종료(메모리 누수 없이)
+
+## 기술스택
+
+`C` · MiniLibX(X11) · Raycasting Engine · DDA Algorithm · 삼각함수(벡터/행렬 연산) · Texture Mapping · Event Loop
+
+## 기능
+
+- `.cub` 맵 파서 및 검증 로직(`check_map`/`parse`/`validate`) — 맵이 벽으로 완전히 둘러싸여 있는지, 텍스처/색상 지정이 올바른지 체크
+- DDA 기반 광선 투사(`raycasting.c`) — 플레이어 시야각(FOV)만큼 여러 방향으로 광선을 쏘아 각 방향의 벽까지 거리를 계산
+- 거리 기반 원근 보정 및 세로줄 렌더링(`render.c`)으로 3D처럼 보이는 화면 구성
+- 방향별(N/S/E/W) 텍스처 매핑(`texture.c`) — 광선이 부딪힌 벽면이 어느 방향인지 판별해 올바른 텍스처와 텍스처 내 좌표를 계산
+- WASD 이동 및 벽 충돌 검사(`move.c`/`validate.c`), 방향키 회전(`rotate.c`)
+- 이미지 버퍼(`img_buffer.c`) 기반 렌더링으로 프레임마다 픽셀을 직접 계산해 그리기
+
+## 문제해결 및 예방
+
+**벽 충돌 판정이 코너에서 뚫리는 문제**
+플레이어가 벽 모서리(코너) 근처를 대각선으로 이동할 때, x축과 y축 이동을 함께 검사하지 않고 이동 벡터 전체를 한 번에 검사하다 보니 실제로는 벽에 부딪혀야 할 상황에서 코너를 통과해버리는 버그가 있었습니다(`wall collision all fix` 등 다수의 반복 수정). x축 이동과 y축 이동을 각각 독립적으로 검사해 한 축이라도 충돌하면 해당 축의 이동만 취소하는 방식으로 바꿔, 코너에서도 자연스럽게 벽을 타고 미끄러지듯 이동하도록 고쳤습니다.
+
+**텍스처가 좌우/상하로 뒤집혀 보이는 문제**
+광선이 벽의 어느 면(북/남/동/서)에 부딪혔는지에 따라 텍스처를 가로 방향으로 뒤집어 매핑해야 하는데, 초기 구현은 모든 방향에 동일한 텍스처 좌표 계산식을 사용해 특정 방향에서만 텍스처가 거울처럼 뒤집혀 보였습니다. 광선의 진행 방향과 충돌면의 법선 방향을 비교해 텍스처 x좌표를 반전시켜야 하는 케이스를 명시적으로 분기 처리해 해결했습니다.
+
+**`.cub` 파일 확장자가 아닌 인자로 인한 세그폴트**
+`.cub` 확장자가 아닌 파일이나 존재하지 않는 파일을 인자로 넘겼을 때, 파일 검증 이전에 파싱 로직이 먼저 실행되며 세그폴트가 발생하는 문제가 있었습니다. 인자 개수·확장자·파일 오픈 가능 여부를 파싱 진입 전 단계에서 순서대로 검증하고, 실패 시 명확한 에러 메시지와 함께 정상 종료하도록 방어 로직을 앞단에 추가했습니다.
+
+**팀 협업에서의 좌표계 불일치**
+맵 파싱과 렌더링을 각자 나눠 작업하다 보니 한쪽은 (row, col), 다른 쪽은 (x, y) 순서로 좌표를 다뤄 통합 시점에 위치가 어긋나는 문제가 있었습니다. 공통 헤더(`cub3d.h`)에 좌표 규약을 주석으로 명시하고, 이후 모듈 간 인터페이스를 변경할 때는 헤더 파일을 먼저 리뷰한 뒤 구현하는 순서로 협업 방식을 조정했습니다.
